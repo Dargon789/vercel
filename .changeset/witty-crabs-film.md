@@ -1,5 +1,6 @@
 ---
-
+"Master": patch
 ---
 
-Master
+Provide a summary of the changes for the changelog here.
+
