@@ -11,6 +11,7 @@ import { domainsCommand } from './domains/command';
 import { envCommand } from './env/command';
 import { gitCommand } from './git/command';
 import { guidanceCommand } from './guidance/command';
+import { httpstatCommand } from './httpstat/command';
 import { initCommand } from './init/command';
 import { inspectCommand } from './inspect/command';
 import { installCommand } from './install/command';
@@ -23,6 +24,7 @@ import { logoutCommand } from './logout/command';
 import { logsCommand } from './logs/command';
 import { mcpCommand } from './mcp/command';
 import { microfrontendsCommand } from './microfrontends/command';
+import { openCommand } from './open/command';
 import { projectCommand } from './project/command';
 import { promoteCommand } from './promote/command';
 import { pullCommand } from './pull/command';
@@ -52,6 +54,7 @@ const commandsStructs = [
   domainsCommand,
   envCommand,
   gitCommand,
+  httpstatCommand,
   initCommand,
   inspectCommand,
   installCommand,
@@ -64,6 +67,7 @@ const commandsStructs = [
   logsCommand,
   mcpCommand,
   microfrontendsCommand,
+  openCommand,
   projectCommand,
   promoteCommand,
   pullCommand,

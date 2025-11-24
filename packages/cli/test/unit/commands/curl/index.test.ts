@@ -2,9 +2,12 @@ import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { client } from '../../../mocks/client';
 import curl from '../../../../src/commands/curl';
 import { getDeploymentUrlById } from '../../../../src/commands/curl/deployment-url';
+import { getDeploymentUrlAndToken } from '../../../../src/commands/curl/shared';
 import { useUser } from '../../../mocks/user';
 import { useProject } from '../../../mocks/project';
 import { useTeams } from '../../../mocks/team';
+
+const MOCK_ACCOUNT_ID = 'team_test123';
 
 let spawnMock: ReturnType<typeof vi.fn>;
 vi.mock('child_process', () => ({
@@ -13,6 +16,26 @@ vi.mock('child_process', () => ({
 
 describe('curl', () => {
   let originalProcessArgv: string[];
+
+  const setupLinkedProject = async () => {
+    const { setupUnitFixture } = await import(
+      '../../../helpers/setup-unit-fixture'
+    );
+    const cwd = setupUnitFixture('commands/deploy/static');
+    client.cwd = cwd;
+
+    useUser();
+    useTeams('team_dummy');
+    useProject({
+      id: 'static',
+      name: 'static-project',
+      latestDeployments: [
+        {
+          url: 'static-project-abc123.vercel.app',
+        },
+      ],
+    });
+  };
 
   beforeEach(async () => {
     originalProcessArgv = process.argv;
@@ -66,11 +89,38 @@ describe('curl', () => {
       await expect(client.stderr).toOutput('requires an API path');
     });
 
-    it('should accept / as a valid path', () => {
-      const path = '/';
-      expect(path).toBeTruthy();
-      expect(path).not.toBe('--');
-      expect(path.startsWith('--')).toBe(false);
+    it('should accept / as a valid path', async () => {
+      await setupLinkedProject();
+
+      client.setArgv('curl', '/', '--protection-bypass', 'test-secret');
+      const exitCode = await curl(client);
+
+      expect(exitCode).toEqual(0);
+
+      expect(client.telemetryEventStore).toHaveTelemetryEvents([
+        {
+          key: 'argument:path',
+          value: 'slash',
+        },
+        {
+          key: 'option:protection-bypass',
+          value: '[REDACTED]',
+        },
+      ]);
+    });
+
+    it('should reject when a full https URL is provided as the path', async () => {
+      client.setArgv('curl', 'https://example.com/api/hello');
+      const exitCode = await curl(client);
+      expect(exitCode).toEqual(1);
+      await expect(client.stderr).toOutput('must be a relative API path');
+    });
+
+    it('should reject when a full http URL is provided as the path', async () => {
+      client.setArgv('curl', 'http://localhost:3000/');
+      const exitCode = await curl(client);
+      expect(exitCode).toEqual(1);
+      await expect(client.stderr).toOutput('must be a relative API path');
     });
 
     it('should reject unrecognized flags before --', async () => {
@@ -171,6 +221,37 @@ describe('curl', () => {
         separatorIndex !== -1 ? process.argv.slice(separatorIndex + 1) : [];
 
       expect(curlFlags).toEqual(['--header', 'Content-Type: application/json']);
+    });
+
+    it('should accept a full deployment URL', async () => {
+      await setupLinkedProject();
+
+      client.setArgv(
+        'curl',
+        '/api/hello',
+        '--deployment',
+        'https://deployment-xyz789.vercel.app',
+        '--protection-bypass',
+        'test-secret'
+      );
+
+      const exitCode = await curl(client);
+
+      expect(exitCode).toEqual(0);
+      expect(client.telemetryEventStore).toHaveTelemetryEvents([
+        {
+          key: 'argument:path',
+          value: 'slash',
+        },
+        {
+          key: 'option:deployment',
+          value: 'url',
+        },
+        {
+          key: 'option:protection-bypass',
+          value: '[REDACTED]',
+        },
+      ]);
     });
   });
 
@@ -343,34 +424,69 @@ describe('curl', () => {
 
   describe('telemetry', () => {
     it('tracks path argument with leading slash', async () => {
-      client.setArgv('curl', '/api/hello');
-      // this throws because API endpoints aren't mocked, but telemetry is tracked before that
-      await expect(curl(client)).rejects.toThrow();
+      await setupLinkedProject();
 
+      client.setArgv(
+        'curl',
+        '/api/hello',
+        '--protection-bypass',
+        'test-secret'
+      );
+      const exitCode = await curl(client);
+
+      expect(exitCode).toEqual(0);
       expect(client.telemetryEventStore).toHaveTelemetryEvents([
         {
           key: 'argument:path',
           value: 'slash',
         },
+        {
+          key: 'option:protection-bypass',
+          value: '[REDACTED]',
+        },
       ]);
     });
 
     it('tracks path argument without leading slash', async () => {
-      client.setArgv('curl', 'api/hello');
-      await expect(curl(client)).rejects.toThrow();
+      await setupLinkedProject();
 
+      client.setArgv('curl', 'api/hello', '--protection-bypass', 'test-secret');
+      const exitCode = await curl(client);
+
+      expect(exitCode).toEqual(0);
       expect(client.telemetryEventStore).toHaveTelemetryEvents([
         {
           key: 'argument:path',
           value: 'no-slash',
         },
+        {
+          key: 'option:protection-bypass',
+          value: '[REDACTED]',
+        },
       ]);
     });
 
     it('tracks deployment option with dpl_ prefix', async () => {
-      client.setArgv('curl', '/api/hello', '--deployment', 'dpl_ABC123');
-      await expect(curl(client)).rejects.toThrow();
+      await setupLinkedProject();
 
+      client.setArgv(
+        'curl',
+        '/api/hello',
+        '--deployment',
+        'dpl_ABC123',
+        '--protection-bypass',
+        'test-secret'
+      );
+
+      client.scenario.get('/v13/deployments/dpl_ABC123', (_req, res) => {
+        res.json({
+          url: 'deployment-abc123.vercel.app',
+        });
+      });
+
+      const exitCode = await curl(client);
+
+      expect(exitCode).toEqual(0);
       expect(client.telemetryEventStore).toHaveTelemetryEvents([
         {
           key: 'argument:path',
@@ -380,13 +496,35 @@ describe('curl', () => {
           key: 'option:deployment',
           value: 'dpl_',
         },
+        {
+          key: 'option:protection-bypass',
+          value: '[REDACTED]',
+        },
       ]);
     });
 
     it('tracks deployment option without dpl_ prefix', async () => {
-      client.setArgv('curl', '/api/hello', '--deployment', 'ABC123');
-      await expect(curl(client)).rejects.toThrow();
+      await setupLinkedProject();
 
+      client.setArgv(
+        'curl',
+        '/api/hello',
+        '--deployment',
+        'ABC123',
+        '--protection-bypass',
+        'test-secret'
+      );
+
+      // Mock the deployment URL lookup (prefix will be auto-added)
+      client.scenario.get('/v13/deployments/dpl_ABC123', (_req, res) => {
+        res.json({
+          url: 'deployment-abc123.vercel.app',
+        });
+      });
+
+      const exitCode = await curl(client);
+
+      expect(exitCode).toEqual(0);
       expect(client.telemetryEventStore).toHaveTelemetryEvents([
         {
           key: 'argument:path',
@@ -396,18 +534,25 @@ describe('curl', () => {
           key: 'option:deployment',
           value: 'no-prefix',
         },
+        {
+          key: 'option:protection-bypass',
+          value: '[REDACTED]',
+        },
       ]);
     });
 
     it('tracks protection-bypass option', async () => {
+      await setupLinkedProject();
+
       client.setArgv(
         'curl',
         '/api/hello',
         '--protection-bypass',
         'my-secret-key'
       );
-      await expect(curl(client)).rejects.toThrow();
+      const exitCode = await curl(client);
 
+      expect(exitCode).toEqual(0);
       expect(client.telemetryEventStore).toHaveTelemetryEvents([
         {
           key: 'argument:path',
@@ -421,6 +566,8 @@ describe('curl', () => {
     });
 
     it('tracks both deployment and protection-bypass options', async () => {
+      await setupLinkedProject();
+
       client.setArgv(
         'curl',
         'api/test',
@@ -429,8 +576,17 @@ describe('curl', () => {
         '--protection-bypass',
         'another-secret'
       );
-      await expect(curl(client)).rejects.toThrow();
 
+      // Mock the deployment URL lookup
+      client.scenario.get('/v13/deployments/dpl_XYZ789', (_req, res) => {
+        res.json({
+          url: 'deployment-xyz789.vercel.app',
+        });
+      });
+
+      const exitCode = await curl(client);
+
+      expect(exitCode).toEqual(0);
       expect(client.telemetryEventStore).toHaveTelemetryEvents([
         {
           key: 'argument:path',
@@ -450,6 +606,22 @@ describe('curl', () => {
 });
 
 describe('getDeploymentUrlById', () => {
+  it('should accept a bare vercel.app host and return https origin', async () => {
+    const mockClient = {
+      fetch: vi.fn().mockResolvedValue({
+        url: 'should-not-be-used.vercel.app',
+      }),
+    } as any;
+
+    const result = await getDeploymentUrlById(
+      mockClient,
+      'my-app-abc123.vercel.app'
+    );
+
+    expect(result).toBe('https://my-app-abc123.vercel.app');
+    expect(mockClient.fetch).not.toHaveBeenCalled();
+  });
+
   it('should add dpl_ prefix when missing', async () => {
     const mockClient = {
       fetch: vi.fn().mockResolvedValue({
@@ -457,10 +629,15 @@ describe('getDeploymentUrlById', () => {
       }),
     } as any;
 
-    await getDeploymentUrlById(mockClient, 'ERiL45NJvP8ghWxgbvCM447bmxwV');
+    await getDeploymentUrlById(
+      mockClient,
+      'ERiL45NJvP8ghWxgbvCM447bmxwV',
+      MOCK_ACCOUNT_ID
+    );
 
     expect(mockClient.fetch).toHaveBeenCalledWith(
-      '/v13/deployments/dpl_ERiL45NJvP8ghWxgbvCM447bmxwV'
+      '/v13/deployments/dpl_ERiL45NJvP8ghWxgbvCM447bmxwV',
+      { accountId: MOCK_ACCOUNT_ID }
     );
   });
 
@@ -471,10 +648,15 @@ describe('getDeploymentUrlById', () => {
       }),
     } as any;
 
-    await getDeploymentUrlById(mockClient, 'dpl_ERiL45NJvP8ghWxgbvCM447bmxwV');
+    await getDeploymentUrlById(
+      mockClient,
+      'dpl_ERiL45NJvP8ghWxgbvCM447bmxwV',
+      MOCK_ACCOUNT_ID
+    );
 
     expect(mockClient.fetch).toHaveBeenCalledWith(
-      '/v13/deployments/dpl_ERiL45NJvP8ghWxgbvCM447bmxwV'
+      '/v13/deployments/dpl_ERiL45NJvP8ghWxgbvCM447bmxwV',
+      { accountId: MOCK_ACCOUNT_ID }
     );
   });
 
@@ -485,7 +667,8 @@ describe('getDeploymentUrlById', () => {
 
     const result = await getDeploymentUrlById(
       mockClient,
-      'ERiL45NJvP8ghWxgbvCM447bmxwV'
+      'ERiL45NJvP8ghWxgbvCM447bmxwV',
+      MOCK_ACCOUNT_ID
     );
 
     expect(result).toBeNull();
@@ -498,11 +681,106 @@ describe('getDeploymentUrlById', () => {
       }),
     } as any;
 
-    const result = await getDeploymentUrlById(mockClient, 'XYZ789ABC123');
+    const result = await getDeploymentUrlById(
+      mockClient,
+      'XYZ789ABC123',
+      MOCK_ACCOUNT_ID
+    );
 
     expect(result).toBe('https://my-app-xyz789.vercel.app');
     expect(mockClient.fetch).toHaveBeenCalledWith(
-      '/v13/deployments/dpl_XYZ789ABC123'
+      '/v13/deployments/dpl_XYZ789ABC123',
+      { accountId: MOCK_ACCOUNT_ID }
     );
+  });
+});
+
+describe('getDeploymentUrlAndToken target selection', () => {
+  it('uses production target alias when available', async () => {
+    const { setupUnitFixture } = await import(
+      '../../../helpers/setup-unit-fixture'
+    );
+    const cwd = setupUnitFixture('commands/deploy/static');
+    client.cwd = cwd;
+
+    useUser();
+    useTeams('team_dummy');
+    useProject({
+      id: 'static',
+      name: 'static-project',
+      targets: {
+        production: { alias: ['prod-alias.vercel.app'] },
+      },
+      latestDeployments: [
+        {
+          url: 'static-project-abc123.vercel.app',
+        },
+      ],
+    } as any);
+
+    const res = await getDeploymentUrlAndToken(client, 'curl', '/api/hello', {
+      protectionBypassFlag: 'test-secret',
+    });
+
+    expect(typeof res).toBe('object');
+    if (typeof res === 'number') {
+      throw new Error('expected object result');
+    }
+    expect(res.fullUrl).toBe('https://prod-alias.vercel.app/api/hello');
+  });
+
+  it('falls back to latest deployment url when no production alias', async () => {
+    const { setupUnitFixture } = await import(
+      '../../../helpers/setup-unit-fixture'
+    );
+    const cwd = setupUnitFixture('commands/deploy/static');
+    client.cwd = cwd;
+
+    useUser();
+    useTeams('team_dummy');
+    useProject({
+      id: 'static',
+      name: 'static-project',
+      latestDeployments: [
+        {
+          url: 'static-project-abc123.vercel.app',
+        },
+      ],
+    } as any);
+
+    const res = await getDeploymentUrlAndToken(client, 'curl', '/api/hello', {
+      protectionBypassFlag: 'test-secret',
+    });
+
+    expect(typeof res).toBe('object');
+    if (typeof res === 'number') {
+      throw new Error('expected object result');
+    }
+    expect(res.fullUrl).toBe(
+      'https://static-project-abc123.vercel.app/api/hello'
+    );
+  });
+
+  it('throws when no target or latest deployments exist', async () => {
+    const { setupUnitFixture } = await import(
+      '../../../helpers/setup-unit-fixture'
+    );
+    const cwd = setupUnitFixture('commands/deploy/static');
+    client.cwd = cwd;
+
+    useUser();
+    useTeams('team_dummy');
+    useProject({
+      id: 'static',
+      name: 'static-project',
+      latestDeployments: [],
+      targets: {},
+    } as any);
+
+    await expect(
+      getDeploymentUrlAndToken(client, 'curl', '/api/hello', {
+        protectionBypassFlag: 'test-secret',
+      })
+    ).rejects.toThrow('No deployment URL found for the project');
   });
 });

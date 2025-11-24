@@ -28,6 +28,8 @@ import {
   type Meta,
   type PackageJson,
   shouldUseExperimentalBackends,
+  isBackendBuilder,
+  type Lambda,
 } from '@vercel/build-utils';
 import type { VercelConfig } from '@vercel/client';
 import { fileNameSymbol } from '@vercel/client';
@@ -705,55 +707,64 @@ async function doBuild(
         }
       }
 
-      // Experimental feature where users can provide a routes.json which will be mapped ot the
-      // single lambda function output, giving o11y to those routes.
-      const backendBuilders = [
-        '@vercel/express',
-        '@vercel/hono',
-        '@vercel/fastify',
-      ];
-      const isBackendBuilder = build.use && backendBuilders.includes(build.use);
-      if (process.env.VERCEL_EXPERIMENTAL_ROUTES_JSON === '1') {
-        if ('output' in buildResult && buildResult.output && isBackendBuilder) {
-          const routesJsonPath = join(outputDir, '..', 'routes.json');
-          if (existsSync(routesJsonPath)) {
-            try {
-              const routesJson = await readJSONFile(routesJsonPath);
-              if (
-                routesJson &&
-                typeof routesJson === 'object' &&
-                'routes' in routesJson &&
-                Array.isArray(routesJson.routes)
-              ) {
-                // Convert routes from introspection format to Vercel routing format
-                const convertedRoutes = [];
-                for (const route of routesJson.routes) {
-                  if (typeof route.source !== 'string') {
-                    continue;
-                  }
-                  const { src } = sourceToRegex(route.source);
-                  const newRoute: Route = {
-                    src,
-                    dest: route.source,
-                  };
-                  if (route.methods) {
-                    newRoute.methods = route.methods;
-                  }
-                  if (route.source === '/') {
-                    continue;
-                  }
-                  convertedRoutes.push(newRoute);
+      if (
+        'output' in buildResult &&
+        buildResult.output &&
+        (isBackendBuilder(build) || build.use === '@vercel/python')
+      ) {
+        const routesJsonPath = join(workPath, '.vercel', 'routes.json');
+        if (existsSync(routesJsonPath)) {
+          try {
+            const routesJson = await readJSONFile(routesJsonPath);
+            if (
+              routesJson &&
+              typeof routesJson === 'object' &&
+              'routes' in routesJson &&
+              Array.isArray(routesJson.routes)
+            ) {
+              // This is a v2 build output, so only remap the outputs
+              // if we have an index lambda
+              const indexLambda =
+                'index' in buildResult.output
+                  ? (buildResult.output['index'] as Lambda)
+                  : undefined;
+              // Convert routes from introspection format to Vercel routing format
+              const convertedRoutes = [];
+              const convertedOutputs: Record<string, Lambda> = indexLambda
+                ? { index: indexLambda }
+                : {};
+              for (const route of routesJson.routes) {
+                if (typeof route.source !== 'string') {
+                  continue;
                 }
-                // Wrap routes with filesystem handler and catch-all
-                (buildResult as BuildResultV2Typical).routes = [
-                  { handle: 'filesystem' },
-                  ...convertedRoutes,
-                  { src: '/(.*)', dest: '/' },
-                ];
+                const { src } = sourceToRegex(route.source);
+                const newRoute: Route = {
+                  src,
+                  dest: route.source,
+                };
+                if (route.methods) {
+                  newRoute.methods = route.methods;
+                }
+                if (route.source === '/') {
+                  continue;
+                }
+                if (indexLambda) {
+                  convertedOutputs[route.source] = indexLambda;
+                }
+                convertedRoutes.push(newRoute);
               }
-            } catch (error) {
-              output.error(`Failed to read routes.json: ${error}`);
+              // Wrap routes with filesystem handler and catch-all
+              (buildResult as BuildResultV2Typical).routes = [
+                { handle: 'filesystem' },
+                ...convertedRoutes,
+                { src: '/(.*)', dest: '/' },
+              ];
+              if (indexLambda) {
+                (buildResult as BuildResultV2Typical).output = convertedOutputs;
+              }
             }
+          } catch (error) {
+            output.error(`Failed to read routes.json: ${error}`);
           }
         }
       }
@@ -776,16 +787,17 @@ async function doBuild(
             buildOutputLength: String(buildOutputLength),
           })
           .trace<Record<string, PathOverride> | undefined | void>(() =>
-            writeBuildResult(
+            writeBuildResult({
               repoRootPath,
               outputDir,
               buildResult,
               build,
               builder,
               builderPkg,
-              localConfig,
-              standalone
-            )
+              vercelConfig: localConfig,
+              standalone,
+              workPath,
+            })
           )
           .then(
             (override: Record<string, PathOverride> | undefined | void) => {

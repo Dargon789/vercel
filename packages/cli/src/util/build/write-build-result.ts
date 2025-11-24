@@ -29,6 +29,7 @@ import {
   normalizePath,
   type TriggerEvent,
   isExperimentalBackendsEnabled,
+  isBackendBuilder,
 } from '@vercel/build-utils';
 import pipe from 'promisepipe';
 import { merge } from './merge';
@@ -51,38 +52,52 @@ interface FunctionConfiguration {
   supportsCancellation?: boolean;
 }
 
-export async function writeBuildResult(
-  repoRootPath: string,
-  outputDir: string,
-  buildResult: BuildResultV2 | BuildResultV3,
-  build: Builder,
-  builder: BuilderV2 | BuilderV3,
-  builderPkg: PackageJson,
-  vercelConfig: VercelConfig | null,
-  standalone: boolean = false
-) {
+export async function writeBuildResult(args: {
+  repoRootPath: string;
+  outputDir: string;
+  buildResult: BuildResultV2 | BuildResultV3;
+  build: Builder;
+  builder: BuilderV2 | BuilderV3;
+  builderPkg: PackageJson;
+  vercelConfig: VercelConfig | null;
+  standalone: boolean;
+  workPath: string;
+}) {
+  const {
+    repoRootPath,
+    outputDir,
+    buildResult,
+    build,
+    builder,
+    builderPkg,
+    vercelConfig,
+    standalone,
+    workPath,
+  } = args;
   let version = builder.version;
   if (isExperimentalBackendsEnabled() && 'output' in buildResult) {
     version = 2;
   }
   if (typeof version !== 'number' || version === 2) {
-    return writeBuildResultV2(
+    return writeBuildResultV2({
       repoRootPath,
       outputDir,
-      buildResult as BuildResultV2,
+      buildResult: buildResult as BuildResultV2,
       build,
       vercelConfig,
-      standalone
-    );
+      standalone,
+      workPath,
+    });
   } else if (version === 3) {
-    return writeBuildResultV3(
+    return writeBuildResultV3({
       repoRootPath,
       outputDir,
-      buildResult as BuildResultV3,
+      buildResult: buildResult as BuildResultV3,
       build,
       vercelConfig,
-      standalone
-    );
+      standalone,
+      workPath,
+    });
   }
   throw new Error(
     `Unsupported Builder version \`${version}\` from "${builderPkg.name}"`
@@ -122,14 +137,23 @@ function stripDuplicateSlashes(path: string): string {
  * Writes the output from the `build()` return value of a v2 Builder to
  * the filesystem.
  */
-async function writeBuildResultV2(
-  repoRootPath: string,
-  outputDir: string,
-  buildResult: BuildResultV2,
-  build: Builder,
-  vercelConfig: VercelConfig | null,
-  standalone: boolean = false
-) {
+async function writeBuildResultV2(args: {
+  repoRootPath: string;
+  outputDir: string;
+  buildResult: BuildResultV2;
+  build: Builder;
+  vercelConfig: VercelConfig | null;
+  standalone: boolean;
+  workPath: string;
+}) {
+  const {
+    repoRootPath,
+    outputDir,
+    buildResult,
+    build,
+    vercelConfig,
+    standalone,
+  } = args;
   if ('buildOutputPath' in buildResult) {
     await mergeBuilderOutput(outputDir, buildResult);
     return;
@@ -254,49 +278,63 @@ async function writeBuildResultV2(
  * Writes the output from the `build()` return value of a v3 Builder to
  * the filesystem.
  */
-async function writeBuildResultV3(
-  repoRootPath: string,
-  outputDir: string,
-  buildResult: BuildResultV3,
-  build: Builder,
-  vercelConfig: VercelConfig | null,
-  standalone: boolean = false
-) {
+async function writeBuildResultV3(args: {
+  repoRootPath: string;
+  outputDir: string;
+  buildResult: BuildResultV3;
+  build: Builder;
+  vercelConfig: VercelConfig | null;
+  standalone: boolean;
+  workPath: string;
+}) {
+  const {
+    repoRootPath,
+    outputDir,
+    buildResult,
+    build,
+    vercelConfig,
+    standalone,
+    workPath,
+  } = args;
   const { output } = buildResult;
-  if (process.env.VERCEL_EXPERIMENTAL_ROUTES_JSON === '1') {
-    const routesJsonPath = join(outputDir, '..', 'routes.json');
-    if (existsSync(routesJsonPath)) {
-      try {
-        const newOutput: Record<string, Lambda | EdgeFunction> = {
-          index: output,
-        };
-        const routesJson = await fs.readJSON(routesJsonPath);
-        if (
-          routesJson &&
-          typeof routesJson === 'object' &&
-          'routes' in routesJson &&
-          Array.isArray(routesJson.routes)
-        ) {
-          for (const route of routesJson.routes) {
-            if (route.source === '/') {
-              continue;
-            }
-            if (route.source) {
-              newOutput[route.source] = output;
-            }
+  const routesJsonPath = join(workPath, '.vercel', 'routes.json');
+
+  if (
+    (isBackendBuilder(build) || build.use === '@vercel/python') &&
+    existsSync(routesJsonPath)
+  ) {
+    try {
+      const newOutput: Record<string, Lambda | EdgeFunction> = {
+        index: output,
+      };
+      const routesJson = await fs.readJSON(routesJsonPath);
+      if (
+        routesJson &&
+        typeof routesJson === 'object' &&
+        'routes' in routesJson &&
+        Array.isArray(routesJson.routes)
+      ) {
+        for (const route of routesJson.routes) {
+          if (route.source === '/') {
+            continue;
+          }
+          if (route.source) {
+            newOutput[route.source] = output;
           }
         }
-        return writeBuildResultV2(
-          repoRootPath,
-          outputDir,
-          { output: newOutput, routes: buildResult.routes },
-          build,
-          vercelConfig,
-          standalone
-        );
-      } catch (error) {
-        outputManager.error(`Failed to read routes.json: ${error}`);
       }
+
+      return writeBuildResultV2({
+        repoRootPath,
+        outputDir,
+        buildResult: { output: newOutput, routes: buildResult.routes },
+        build,
+        vercelConfig,
+        standalone,
+        workPath,
+      });
+    } catch (error) {
+      outputManager.error(`Failed to read routes.json: ${error}`);
     }
   }
   const src = build.src;

@@ -687,7 +687,7 @@ export async function serverBuild({
       }
       const normalizedPathname = normalizePage(pathname);
 
-      if (isDynamicRoute(normalizedPathname)) {
+      if (isDynamicRoute(normalizedPathname, nextVersion)) {
         dynamicPages.push(normalizedPathname);
       }
 
@@ -1268,7 +1268,10 @@ export async function serverBuild({
             }
             case 'server/pages-manifest.json': {
               for (const key of Object.keys(manifestData)) {
-                if (isDynamicRoute(key) && !normalizedPages.has(key)) {
+                if (
+                  isDynamicRoute(key, nextVersion) &&
+                  !normalizedPages.has(key)
+                ) {
                   delete manifestData[key];
                 }
               }
@@ -1281,7 +1284,7 @@ export async function serverBuild({
                   key.replace(/(^|\/)(page|route)$/, '');
 
                 if (
-                  isDynamicRoute(normalizedKey) &&
+                  isDynamicRoute(normalizedKey, nextVersion) &&
                   !normalizedPages.has(normalizedKey)
                 ) {
                   delete manifestData[key];
@@ -1634,6 +1637,7 @@ export async function serverBuild({
     isAppClientSegmentCacheEnabled,
     isAppClientParamParsingEnabled,
     appPathnameFilesMap: getAppRouterPathnameFilesMap(files),
+    nextVersion,
   });
 
   await Promise.all(
@@ -1673,7 +1677,7 @@ export async function serverBuild({
       // they are in the prerender manifest since a dynamic
       // route can have some prerendered paths and the rest SSR
       inversedAppPathManifest[route] &&
-      isDynamicRoute(route)
+      isDynamicRoute(route, nextVersion)
     ) {
       return;
     }
@@ -1686,7 +1690,15 @@ export async function serverBuild({
     ];
   });
 
+  // Check if the app has Pages Router
+  // Use the appType property from routes manifest if available
+  // Otherwise, assume Pages Router exists (for backward compatibility with older Next.js versions)
+  const hasPagesRouter = routesManifest.appType
+    ? routesManifest.appType === 'pages' || routesManifest.appType === 'hybrid'
+    : true;
+
   const isNextDataServerResolving =
+    hasPagesRouter &&
     (middleware.staticRoutes.length > 0 || nodeMiddleware) &&
     semver.gte(nextVersion, NEXT_DATA_MIDDLEWARE_RESOLVING_VERSION);
 
@@ -2422,7 +2434,7 @@ export async function serverBuild({
       // normalize _next/data URL before processing rewrites
       ...normalizeNextDataRoute(),
 
-      ...(!isNextDataServerResolving
+      ...(!isNextDataServerResolving && hasPagesRouter
         ? [
             // No-op _next/data rewrite to trigger handle: 'rewrites' and then 404
             // if no match to prevent rewriting _next/data unexpectedly
@@ -2608,7 +2620,10 @@ export async function serverBuild({
             // filter to only static data routes as dynamic routes will be handled
             // below
             const { pathname } = new URL(route.dest || '/', 'http://n');
-            return !isDynamicRoute(pathname.replace(/(\\)?\.json$/, ''));
+            return !isDynamicRoute(
+              pathname.replace(/(\\)?\.json$/, ''),
+              nextVersion
+            );
           })
         : []),
 
@@ -2679,7 +2694,7 @@ export async function serverBuild({
             .filter(Boolean)
         : dataRoutes),
 
-      ...(!isNextDataServerResolving
+      ...(!isNextDataServerResolving && hasPagesRouter
         ? [
             // ensure we 404 for non-existent _next/data routes before
             // trying page dynamic routes

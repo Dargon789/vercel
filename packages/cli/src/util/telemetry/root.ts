@@ -117,6 +117,13 @@ export class RootTelemetryClient extends TelemetryClient {
     });
   }
 
+  trackCliCommandHttpstat(actual: string) {
+    this.trackCliCommand({
+      command: 'httpstat',
+      value: actual,
+    });
+  }
+
   trackCliCommandInit(actual: string) {
     this.trackCliCommand({
       command: 'init',
@@ -190,6 +197,13 @@ export class RootTelemetryClient extends TelemetryClient {
   trackCliCommandMicrofrontends(actual: string) {
     this.trackCliCommand({
       command: 'microfrontends',
+      value: actual,
+    });
+  }
+
+  trackCliCommandOpen(actual: string) {
+    this.trackCliCommand({
+      command: 'open',
       value: actual,
     });
   }

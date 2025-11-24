@@ -659,6 +659,10 @@ const main = async () => {
             func = null;
             break;
           }
+        case 'httpstat':
+          telemetry.trackCliCommandHttpstat(userSuppliedSubCommand);
+          func = require('./commands/httpstat').default;
+          break;
         case 'init':
           telemetry.trackCliCommandInit(userSuppliedSubCommand);
           func = require('./commands/init').default;
@@ -706,6 +710,10 @@ const main = async () => {
         case 'microfrontends':
           telemetry.trackCliCommandMicrofrontends(userSuppliedSubCommand);
           func = require('./commands/microfrontends').default;
+          break;
+        case 'open':
+          telemetry.trackCliCommandOpen(userSuppliedSubCommand);
+          func = require('./commands/open').default;
           break;
         case 'project':
           telemetry.trackCliCommandProject(userSuppliedSubCommand);
