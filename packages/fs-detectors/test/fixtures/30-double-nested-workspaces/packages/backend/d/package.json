@@ -4,7 +4,7 @@
   "license": "MIT",
   "version": "0.1.0",
   "devDependencies": {
-    "next": "15.5.8",
+    "next": "15.5.9",
     "once": "1.4.0"
   }
 }
