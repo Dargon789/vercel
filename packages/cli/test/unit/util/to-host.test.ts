@@ -45,10 +45,13 @@ describe('toHost', () => {
     // Missing slash in protocol
     expect(toHost('https:/example.com')).toBe('example.com');
     expect(toHost('http:/example.com')).toBe('example.com');
-    
+
     // Extra slash in protocol
     expect(toHost('https:///example.com')).toBe('example.com');
     expect(toHost('http:///example.com')).toBe('example.com');
+
+    // Missing slashes after protocol
+    expect(toHost('https:example.com')).toBe('example.com');
   });
 });
 
