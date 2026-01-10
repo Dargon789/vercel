@@ -59,6 +59,19 @@ describe('validateUrlProtocol', () => {
     expect(validateUrlProtocol('example.com')).toEqual({ isValid: true });
   });
 
+  it('should return invalid for malformed http and https protocols', () => {
+    // Missing slash in protocol with path
+    expect(validateUrlProtocol('https:/example.com/path').isValid).toBe(false);
+    expect(validateUrlProtocol('http:/example.com').isValid).toBe(false);
+
+    // Extra slash in protocol
+    expect(validateUrlProtocol('http:///example.com').isValid).toBe(false);
+
+    // Missing both slashes after protocol
+    expect(validateUrlProtocol('https:example.com').isValid).toBe(false);
+    expect(validateUrlProtocol('http:example.com').isValid).toBe(false);
+    expect(validateUrlProtocol('http:example.com?foo=bar').isValid).toBe(false);
+  });
   it('should detect missing slash in protocol', () => {
     const result = validateUrlProtocol('https:/example.com');
     expect(result.isValid).toBe(false);
