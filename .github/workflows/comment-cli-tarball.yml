@@ -3,6 +3,10 @@ name: Comment CLI Tarball Instructions
 on:
   pull_request:
 
+permissions:
+  contents: read
+  pull-requests: write
+
 env:
   VERCEL_TELEMETRY_DISABLED: '1'
 
