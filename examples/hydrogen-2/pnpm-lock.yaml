@@ -6,17 +6,17 @@ settings:
 
 dependencies:
   '@remix-run/react':
-    specifier: 1.19.1
-    version: 1.19.1(react-dom@18.2.0)(react@18.2.0)
+    specifier: 2.17.3
+    version: 2.17.3(react-dom@18.2.0)(react@18.2.0)(typescript@4.9.5)
   '@shopify/cli':
     specifier: 3.59.0
     version: 3.59.0
   '@shopify/cli-hydrogen':
-    specifier: ^9.0.11
+    specifier: ^9.0.0
     version: 9.0.11(@remix-run/dev@1.19.1)(@types/react@18.0.20)(react-dom@18.2.0)(react@18.2.0)
   '@shopify/hydrogen':
     specifier: ^2023.7.2
-    version: 2023.7.2(@remix-run/react@1.19.1)(@types/react@18.0.20)(react-dom@18.2.0)
+    version: 2023.7.2(@remix-run/react@2.17.3)(@types/react@18.0.20)(react-dom@18.2.0)
   '@shopify/remix-oxygen':
     specifier: ^2.0.0
     version: 2.0.12(@shopify/oxygen-workers-types@3.17.3)
@@ -2664,17 +2664,30 @@ packages:
       - ts-node
       - utf-8-validate
 
-  /@remix-run/react@1.19.1(react-dom@18.2.0)(react@18.2.0):
-    resolution: {integrity: sha512-VrNkI4wt8K+7QKVll/lkNzWwmg2v7LHhUjCWpYhYtmYiyDitl0n6t7pWysWbp+EYwlRUHr4JgHtBgEekhkd7/w==}
-    engines: {node: '>=14.0.0'}
+  /@remix-run/react@2.17.3(react-dom@18.2.0)(react@18.2.0)(typescript@4.9.5):
+    resolution: {integrity: sha512-Ns4YmtuRZpsgoUoq39K/lhPJ92/N2JkMBHIRPINNZ6/o9MiT7cN1qMwjGoqVfoCy6ZFCpMadsw4sPrwMGdkZiQ==}
+    engines: {node: '>=18.0.0'}
     peerDependencies:
-      react: '>=16.8.0'
-      react-dom: '>=16.8.0'
+      react: ^18.0.0
+      react-dom: ^18.0.0
+      typescript: ^5.1.0
+    peerDependenciesMeta:
+      typescript:
+        optional: true
     dependencies:
-      '@remix-run/router': 1.7.2
+      '@remix-run/router': 1.23.0
+      '@remix-run/server-runtime': 2.17.3(typescript@4.9.5)
       react: 18.2.0
       react-dom: 18.2.0(react@18.2.0)
-      react-router-dom: 6.14.2(react-dom@18.2.0)(react@18.2.0)
+      react-router: 6.30.0(react@18.2.0)
+      react-router-dom: 6.30.0(react-dom@18.2.0)(react@18.2.0)
+      turbo-stream: 2.4.1
+      typescript: 4.9.5
+    dev: false
+
+  /@remix-run/router@1.23.0:
+    resolution: {integrity: sha512-O3rHJzAQKamUz1fvE0Qaw0xSFqsA/yafi2iqeE0pvdFtCO1viYx8QL6f3Ln/aCCTLxs68SLf0KPM9eSeM8yBnA==}
+    engines: {node: '>=14.0.0'}
     dev: false
 
   /@remix-run/router@1.7.2:
@@ -2691,6 +2704,25 @@ packages:
       cookie: 0.4.2
       set-cookie-parser: 2.6.0
       source-map: 0.7.4
+
+  /@remix-run/server-runtime@2.17.3(typescript@4.9.5):
+    resolution: {integrity: sha512-8uuV0COprImDpyDB8Rx0VLDKxsttBsMjtdv9BFViz8WfJz79jr8YRfp27hXUs9P4/NU6+wQQYcJawkBj/5uuSg==}
+    engines: {node: '>=18.0.0'}
+    peerDependencies:
+      typescript: ^5.1.0
+    peerDependenciesMeta:
+      typescript:
+        optional: true
+    dependencies:
+      '@remix-run/router': 1.23.0
+      '@types/cookie': 0.6.0
+      '@web3-storage/multipart-parser': 1.0.0
+      cookie: 0.7.2
+      set-cookie-parser: 2.6.0
+      source-map: 0.7.4
+      turbo-stream: 2.4.1
+      typescript: 4.9.5
+    dev: false
 
   /@rollup/pluginutils@4.2.1:
     resolution: {integrity: sha512-iKnFXr7NkdZAIHiIWE+BX5ULi/ucVFYWD6TbAV+rZctiRTY2PL6tsIKhoIOaoskiWAkgu+VsbXgUVDNLHf+InQ==}
@@ -2863,13 +2895,13 @@ packages:
       - xstate
     dev: false
 
-  /@shopify/hydrogen@2023.7.2(@remix-run/react@1.19.1)(@types/react@18.0.20)(react-dom@18.2.0):
+  /@shopify/hydrogen@2023.7.2(@remix-run/react@2.17.3)(@types/react@18.0.20)(react-dom@18.2.0):
     resolution: {integrity: sha512-18SEu+KR2jIpkUc0c7q7TUmS7KjHo9H63Et04r01bOeoYE2tphfsc2HXWXJdSsFORDovEPNLyO4KRNi1mSX8UA==}
     peerDependencies:
       '@remix-run/react': 1.19.1
       '@remix-run/server-runtime': 1.19.1
     dependencies:
-      '@remix-run/react': 1.19.1(react-dom@18.2.0)(react@18.2.0)
+      '@remix-run/react': 2.17.3(react-dom@18.2.0)(react@18.2.0)(typescript@4.9.5)
       '@shopify/hydrogen-react': 2023.7.1(@types/react@18.0.20)(react-dom@18.2.0)(react@18.2.0)
       react: 18.2.0
     transitivePeerDependencies:
@@ -3014,6 +3046,10 @@ packages:
 
   /@types/cookie@0.4.1:
     resolution: {integrity: sha512-XW/Aa8APYr6jSVVA1y/DEIZX0/GMKLEVekNG727R8cs56ahETkRAy/3DR7+fJyh7oUgGwNQaRfXCun0+KbWY7Q==}
+
+  /@types/cookie@0.6.0:
+    resolution: {integrity: sha512-4Kh9a6B2bQciAhf7FSuMRRkUWecJgJu9nPnx3yzpsfXX/c50REIqpHY4C82bXP90qrLtXtkDxTZosYO3UpOwlA==}
+    dev: false
 
   /@types/debug@4.1.8:
     resolution: {integrity: sha512-/vPO1EPOs306Cvhwv7KfVfYvOJqA/S/AXjaHQiJboCZzcNDb+TIJFN9/2C9DZ//ijSKWioNyUxD792QmDJ+HKQ==}
@@ -4248,6 +4284,11 @@ packages:
   /cookie@0.5.0:
     resolution: {integrity: sha512-YZ3GUyn/o8gfKJlnlX7g7xq4gyO6OSuhGPKaaGssGB2qgDUS0gPgtTvoyZLTt9Ab6dC4hfc9dV5arkvc/OCmrw==}
     engines: {node: '>= 0.6'}
+
+  /cookie@0.7.2:
+    resolution: {integrity: sha512-yki5XnKuf750l50uGTllt6kKILY4nQ1eNIQatoXEByZ5dWgnKqbnqmTrBE5B4N7lrMJKQ2ytWMiTO2o0v6Ew/w==}
+    engines: {node: '>= 0.6'}
+    dev: false
 
   /core-js-compat@3.32.0:
     resolution: {integrity: sha512-7a9a3D1k4UCVKnLhrgALyFcP7YCsLOQIxPd0dKjf/6GuPcgyiGP70ewWdCGrSK7evyhymi0qO4EqCmSJofDeYw==}
@@ -8484,26 +8525,26 @@ packages:
     resolution: {integrity: sha512-wViHqhAd8OHeLS/IRMJjTSDHF3U9eWi62F/MledQGPdJGDhodXJ9PBLNGr6WWL7qlH12Mt3TyTpbS+hGXMjCzQ==}
     engines: {node: '>=0.10.0'}
 
-  /react-router-dom@6.14.2(react-dom@18.2.0)(react@18.2.0):
-    resolution: {integrity: sha512-5pWX0jdKR48XFZBuJqHosX3AAHjRAzygouMTyimnBPOLdY3WjzUSKhus2FVMihUFWzeLebDgr4r8UeQFAct7Bg==}
-    engines: {node: '>=14'}
+  /react-router-dom@6.30.0(react-dom@18.2.0)(react@18.2.0):
+    resolution: {integrity: sha512-x30B78HV5tFk8ex0ITwzC9TTZMua4jGyA9IUlH1JLQYQTFyxr/ZxwOJq7evg1JX1qGVUcvhsmQSKdPncQrjTgA==}
+    engines: {node: '>=14.0.0'}
     peerDependencies:
       react: '>=16.8'
       react-dom: '>=16.8'
     dependencies:
-      '@remix-run/router': 1.7.2
+      '@remix-run/router': 1.23.0
       react: 18.2.0
       react-dom: 18.2.0(react@18.2.0)
-      react-router: 6.14.2(react@18.2.0)
+      react-router: 6.30.0(react@18.2.0)
     dev: false
 
-  /react-router@6.14.2(react@18.2.0):
-    resolution: {integrity: sha512-09Zss2dE2z+T1D03IheqAFtK4UzQyX8nFPWx6jkwdYzGLXd5ie06A6ezS2fO6zJfEb/SpG6UocN2O1hfD+2urQ==}
-    engines: {node: '>=14'}
+  /react-router@6.30.0(react@18.2.0):
+    resolution: {integrity: sha512-D3X8FyH9nBcTSHGdEKurK7r8OYE1kKFn3d/CF+CoxbSHkxU7o37+Uh7eAHRXr6k2tSExXYO++07PeXJtA/dEhQ==}
+    engines: {node: '>=14.0.0'}
     peerDependencies:
       react: '>=16.8'
     dependencies:
-      '@remix-run/router': 1.7.2
+      '@remix-run/router': 1.23.0
       react: 18.2.0
     dev: false
 
@@ -9449,6 +9490,10 @@ packages:
       typescript: 4.9.5
     dev: true
 
+  /turbo-stream@2.4.1:
+    resolution: {integrity: sha512-v8kOJXpG3WoTN/+at8vK7erSzo6nW6CIaeOvNOkHQVDajfz1ZVeSxCbc6tOH4hrGZW7VUCV0TOXd8CPzYnYkrw==}
+    dev: false
+
   /type-check@0.3.2:
     resolution: {integrity: sha512-ZCmOJdvOWDBYJlzAoFkC+Q0+bUyEOS1ltgp1MGU03fqHG+dbi9tBFU2Rd9QKiDZFAYrhPh2JUf7rZRIuHRKtOg==}
     engines: {node: '>= 0.8.0'}
@@ -9540,7 +9585,6 @@ packages:
     resolution: {integrity: sha512-1FXk9E2Hm+QzZQ7z+McJiHL4NW1F2EzMu9Nq9i3zAaGqibafqYwCVU6WyWAuyQRRzOlxou8xZSyXLEN8oKj24g==}
     engines: {node: '>=4.2.0'}
     hasBin: true
-    dev: true
 
   /ufo@1.2.0:
     resolution: {integrity: sha512-RsPyTbqORDNDxqAdQPQBpgqhWle1VcTSou/FraClYlHf6TZnQcGslpLcAphNR+sQW4q5lLWLbOsRlh9j24baQg==}
