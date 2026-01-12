@@ -12,6 +12,9 @@ import {
   getInstalledPackageVersion,
   normalizePath,
   NowBuildError,
+  runNpmInstall,
+  runCustomInstallCommand,
+  resetCustomInstallCommandSet,
   type Reporter,
   Span,
   type TraceEvent,
@@ -82,6 +85,12 @@ import {
 import readJSONFile from '../../util/read-json-file';
 import { BuildTelemetryClient } from '../../util/telemetry/commands/build';
 import { validateConfig } from '../../util/validate-config';
+import { validateCronSecret } from '../../util/validate-cron-secret';
+import {
+  compileVercelConfig,
+  findSourceVercelConfigFile,
+  DEFAULT_VERCEL_CONFIG_FILENAME,
+} from '../../util/compile-vercel-config';
 import { help } from '../help';
 import { pullCommandLogic } from '../pull';
 import { buildCommand } from './command';
@@ -109,6 +118,7 @@ interface BuildOutputConfig {
     version: string;
   };
   crons?: Cron[];
+  deploymentId?: string;
 }
 
 /**
@@ -381,6 +391,12 @@ export default async function main(client: Client): Promise<number> {
     for (const key of envToUnset) {
       delete process.env[key];
     }
+
+    // Clean up VERCEL_INSTALL_COMPLETED to allow subsequent builds in the same process
+    delete process.env.VERCEL_INSTALL_COMPLETED;
+
+    // Reset customInstallCommandSet to allow subsequent builds in the same process
+    resetCustomInstallCommandSet();
   }
 }
 
@@ -401,11 +417,47 @@ async function doBuild(
 
   const workPath = join(cwd, project.settings.rootDirectory || '.');
 
+  const sourceConfigFile = await findSourceVercelConfigFile(workPath);
+  let corepackShimDir: string | null | undefined;
+  if (sourceConfigFile) {
+    corepackShimDir = await initCorepack({ repoRootPath: cwd });
+
+    const installCommand = project.settings.installCommand;
+    if (typeof installCommand === 'string') {
+      if (installCommand.trim()) {
+        output.log(`Running install command before config compilation...`);
+        await runCustomInstallCommand({
+          destPath: workPath,
+          installCommand,
+          spawnOpts: { env: process.env },
+          projectCreatedAt: project.settings.createdAt,
+        });
+      } else {
+        output.debug('Skipping empty install command');
+      }
+    } else {
+      output.log(`Installing dependencies before config compilation...`);
+      await runNpmInstall(
+        workPath,
+        [],
+        { env: process.env },
+        undefined,
+        project.settings.createdAt
+      );
+    }
+    process.env.VERCEL_INSTALL_COMPLETED = '1';
+  }
+
+  const compileResult = await compileVercelConfig(workPath);
+
+  const vercelConfigPath =
+    localConfigPath ||
+    compileResult.configPath ||
+    join(workPath, 'vercel.json');
+
   const [pkg, vercelConfig, nowConfig, hasInstrumentation] = await Promise.all([
     readJSONFile<PackageJson>(join(workPath, 'package.json')),
-    readJSONFile<VercelConfig>(
-      localConfigPath || join(workPath, 'vercel.json')
-    ),
+    readJSONFile<VercelConfig>(vercelConfigPath),
     readJSONFile<VercelConfig>(join(workPath, 'now.json')),
     detectInstrumentation(new LocalFileSystemDetector(workPath)),
   ]);
@@ -422,7 +474,9 @@ async function doBuild(
   }
 
   if (vercelConfig) {
-    vercelConfig[fileNameSymbol] = 'vercel.json';
+    vercelConfig[fileNameSymbol] = compileResult.wasCompiled
+      ? compileResult.sourceFile || DEFAULT_VERCEL_CONFIG_FILENAME
+      : 'vercel.json';
   } else if (nowConfig) {
     nowConfig[fileNameSymbol] = 'now.json';
   }
@@ -432,6 +486,34 @@ async function doBuild(
 
   if (validateError) {
     throw validateError;
+  }
+
+  // Validate CRON_SECRET if crons are defined
+  if (localConfig.crons && localConfig.crons.length > 0) {
+    const cronSecretError = validateCronSecret(process.env.CRON_SECRET);
+    if (cronSecretError) {
+      throw cronSecretError;
+    }
+  }
+
+  if (localConfig.customErrorPage) {
+    const errorPages =
+      typeof localConfig.customErrorPage === 'string'
+        ? [localConfig.customErrorPage]
+        : Object.values(localConfig.customErrorPage);
+
+    for (const page of errorPages) {
+      if (page) {
+        const src = join(workPath, page);
+        if (!existsSync(src)) {
+          throw new NowBuildError({
+            code: 'CUSTOM_ERROR_PAGE_NOT_FOUND',
+            message: `The custom error page "${page}" was not found in "${workPath}".`,
+            link: 'https://vercel.com/docs/projects/project-configuration#custom-error-page',
+          });
+        }
+      }
+    }
   }
 
   const projectSettings = {
@@ -486,6 +568,7 @@ async function doBuild(
       projectSettings,
       ignoreBuildScript: true,
       featHandleMiss: true,
+      workPath,
     });
 
     if (detectedBuilders.errors && detectedBuilders.errors.length > 0) {
@@ -574,7 +657,10 @@ async function doBuild(
   const buildResults: Map<Builder, BuildResult | BuildOutputConfig> = new Map();
   const overrides: PathOverride[] = [];
   const repoRootPath = cwd;
-  const corepackShimDir = await initCorepack({ repoRootPath });
+  // Only initialize corepack if not already done during early install
+  if (!corepackShimDir) {
+    corepackShimDir = await initCorepack({ repoRootPath });
+  }
   const diagnostics: Files = {};
 
   for (const build of sortedBuilders) {
@@ -866,6 +952,28 @@ async function doBuild(
     throw existingConfig;
   }
   if (existingConfig) {
+    // Validate deploymentId if present (user-configured for skew protection)
+    if (
+      'deploymentId' in existingConfig &&
+      typeof existingConfig.deploymentId === 'string'
+    ) {
+      const deploymentId = existingConfig.deploymentId;
+      if (deploymentId.startsWith('dpl_')) {
+        throw new NowBuildError({
+          code: 'INVALID_DEPLOYMENT_ID',
+          message: `The deploymentId "${deploymentId}" cannot start with the "dpl_" prefix. Please choose a different deploymentId in your config.`,
+          link: 'https://vercel.com/docs/skew-protection#custom-skew-protection-deployment-id',
+        });
+      }
+      if (deploymentId.length > 32) {
+        throw new NowBuildError({
+          code: 'INVALID_DEPLOYMENT_ID',
+          message: `The deploymentId "${deploymentId}" must be 32 characters or less. Please choose a shorter deploymentId in your config.`,
+          link: 'https://vercel.com/docs/skew-protection#custom-skew-protection-deployment-id',
+        });
+      }
+    }
+
     if (existingConfig.overrides) {
       overrides.push(existingConfig.overrides);
     }
@@ -905,6 +1013,29 @@ async function doBuild(
   const mergedImages = mergeImages(localConfig.images, buildResults.values());
   const mergedCrons = mergeCrons(localConfig.crons, buildResults.values());
   const mergedWildcard = mergeWildcard(buildResults.values());
+  const mergedDeploymentId = mergeDeploymentId(
+    existingConfig?.deploymentId,
+    buildResults.values()
+  );
+
+  // Validate merged deploymentId if present (from build results)
+  if (mergedDeploymentId) {
+    if (mergedDeploymentId.startsWith('dpl_')) {
+      throw new NowBuildError({
+        code: 'INVALID_DEPLOYMENT_ID',
+        message: `The deploymentId "${mergedDeploymentId}" cannot start with the "dpl_" prefix. Please choose a different deploymentId in your config.`,
+        link: 'https://vercel.com/docs/skew-protection#custom-skew-protection-deployment-id',
+      });
+    }
+    if (mergedDeploymentId.length > 32) {
+      throw new NowBuildError({
+        code: 'INVALID_DEPLOYMENT_ID',
+        message: `The deploymentId "${mergedDeploymentId}" must be 32 characters or less. Please choose a shorter deploymentId in your config.`,
+        link: 'https://vercel.com/docs/skew-protection#custom-skew-protection-deployment-id',
+      });
+    }
+  }
+
   const mergedOverrides: Record<string, PathOverride> =
     overrides.length > 0 ? Object.assign({}, ...overrides) : undefined;
 
@@ -920,6 +1051,7 @@ async function doBuild(
     overrides: mergedOverrides,
     framework,
     crons: mergedCrons,
+    ...(mergedDeploymentId && { deploymentId: mergedDeploymentId }),
   };
   await fs.writeJSON(join(outputDir, 'config.json'), config, { spaces: 2 });
 
@@ -1055,6 +1187,23 @@ function mergeWildcard(
     }
   }
   return wildcard;
+}
+
+function mergeDeploymentId(
+  existingDeploymentId: string | undefined,
+  buildResults: Iterable<BuildResult | BuildOutputConfig>
+): string | undefined {
+  // Prefer existing deploymentId from config.json if present
+  if (existingDeploymentId) {
+    return existingDeploymentId;
+  }
+  // Otherwise, take the first deploymentId from build results
+  for (const result of buildResults) {
+    if ('deploymentId' in result && result.deploymentId) {
+      return result.deploymentId;
+    }
+  }
+  return undefined;
 }
 
 /**
