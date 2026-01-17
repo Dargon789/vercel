@@ -12,7 +12,7 @@ dependencies:
     specifier: 3.59.0
     version: 3.59.0
   '@shopify/cli-hydrogen':
-    specifier: ^9.0.11
+    specifier: ^9.0.0
     version: 9.0.11(@remix-run/dev@1.19.1)(@types/react@18.0.20)(react-dom@18.2.0)(react@18.2.0)
   '@shopify/hydrogen':
     specifier: ^2023.7.2
