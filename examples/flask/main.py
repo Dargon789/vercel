@@ -102,4 +102,6 @@ def read_root():
 
 
 if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", port=5001)
+    # For local development, you can enable debug mode (including auto-reloading)
+    # by setting the FLASK_DEBUG environment variable to "1" before running the app.
+    app.run(host="0.0.0.0", port=5001)
