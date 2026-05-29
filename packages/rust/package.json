@@ -21,7 +21,7 @@
     "dist"
   ],
   "dependencies": {
-    "smol-toml": "1.5.2",
+    "smol-toml": "1.6.1",
     "execa": "5"
   },
   "devDependencies": {
