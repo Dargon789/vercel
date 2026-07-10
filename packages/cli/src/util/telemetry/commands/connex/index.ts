@@ -63,6 +63,13 @@ export class ConnexTelemetryClient
     });
   }
 
+  trackCliSubcommandRevokeTokens(actual: string) {
+    this.trackCliSubcommand({
+      subcommand: 'revoke-tokens',
+      value: actual,
+    });
+  }
+
   trackCliArgumentClient(v: string | undefined) {
     if (v) {
       this.trackCliArgument({
@@ -112,6 +119,24 @@ export class ConnexTelemetryClient
     }
   }
 
+  trackCliOptionData(v: string | undefined) {
+    if (v !== undefined) {
+      this.trackCliOption({
+        option: 'data',
+        value: this.redactedValue,
+      });
+    }
+  }
+
+  trackCliOptionConnectorType(v: string | undefined) {
+    if (v) {
+      this.trackCliOption({
+        option: 'connector-type',
+        value: v,
+      });
+    }
+  }
+
   trackCliFlagYes(v: boolean | undefined) {
     if (v) {
       this.trackCliFlag('yes');
@@ -145,6 +170,18 @@ export class ConnexTelemetryClient
         option: 'trigger-path',
         value: this.redactedValue,
       });
+    }
+  }
+
+  trackCliFlagMyTokens(v: boolean | undefined) {
+    if (v) {
+      this.trackCliFlag('my-tokens');
+    }
+  }
+
+  trackCliFlagAllTokens(v: boolean | undefined) {
+    if (v) {
+      this.trackCliFlag('all-tokens');
     }
   }
 
