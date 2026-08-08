@@ -29,11 +29,11 @@
     "@vercel/frameworks": "workspace:*",
     "@vercel/routing-utils": "workspace:*",
     "glob": "8.0.3",
-    "js-yaml": "4.1.0",
+    "js-yaml": "4.1.1",
     "json5": "2.2.2",
     "minimatch": "3.1.2",
     "semver": "6.3.1",
-    "smol-toml": "1.5.2"
+    "smol-toml": "1.6.1"
   },
   "devDependencies": {
     "@types/glob": "7.2.0",
