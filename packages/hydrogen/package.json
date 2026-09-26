@@ -22,7 +22,7 @@
   ],
   "dependencies": {
     "@vercel/static-config": "workspace:*",
-    "ts-morph": "12.0.0"
+    "ts-morph": "24.0.0"
   },
   "peerDependencies": {
     "@vercel/build-utils": "workspace:*"
